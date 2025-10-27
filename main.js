@@ -1,19 +1,61 @@
-import { Command } from "commander";
+﻿import { Command } from "commander";
 import http from "http";
 import fs from "fs/promises";
+import { XMLBuilder } from "fast-xml-parser";
 
 const program = new Command();
 
 program
-    .requiredOption("-i, --input <path>", "���� �� �������� ����� JSON")
-    .requiredOption("-h, --host <host>", "������ �������")
-    .requiredOption("-p, --port <port>", "���� �������");
+    .requiredOption("-i, --input <path>", "шлях до вхідного файлу JSON")
+    .requiredOption("-h, --host <host>", "адреса сервера")
+    .requiredOption("-p, --port <port>", "порт сервера");
 
 program.parse();
-const options = program.opts();
+const { input, host, port } = program.opts();
 
-http.createServer((req, res) => {
-    res.end("Server works!");
-}).listen(options.port, options.host, () => {
-    console.log("Server started");
+http.createServer(async (req, res) => {
+    try {
+        // 1) Читаємо JSON
+        const data = await fs.readFile(input, "utf-8");
+        let json = JSON.parse(data);
+
+        // 2) Зчитуємо параметри з URL
+        const url = new URL(req.url, `http://${host}:${port}`);
+        const showVariety = url.searchParams.get("variety") === "true";
+        const minPetal = url.searchParams.get("min_petal_length");
+
+        // 3) Фільтр по довжині пелюстки
+        if (minPetal) {
+            json = json.filter((item) => item.petal.length > Number(minPetal));
+        }
+
+        // 4) Формування XML об'єктів
+        const flowers = json.map((item) => {
+            const flower = {
+                petal_length: item.petal.length,
+                petal_width: item.petal.width
+            };
+
+            if (showVariety) {
+                flower.variety = item.variety;
+            }
+
+            return flower;
+        });
+
+        // 5) Конвертація в XML
+        const builder = new XMLBuilder();
+        const xml = builder.build({ irises: { flower: flowers } });
+
+        // 6) Відповідь
+        res.setHeader("Content-Type", "application/xml");
+        res.end(xml);
+
+    } catch (error) {
+        console.error(error);
+        res.statusCode = 500;
+        res.end("Server error");
+    }
+}).listen(port, host, () => {
+    console.log(`Server running → http://${host}:${port}`);
 });
