@@ -13,6 +13,12 @@ program
 program.parse();
 const { input, host, port } = program.opts();
 
+try {
+    await fs.access(input);
+} catch (err) {
+    console.error(`Cannot find input file: ${input}`);
+    process.exit(1); // ← завершити програму
+}
 http.createServer(async (req, res) => {
     try {
         // 1) Читаємо JSON
@@ -55,7 +61,7 @@ http.createServer(async (req, res) => {
         console.error(error);
         res.statusCode = 500;
         res.end("Server error");
-    }
+    } 
 }).listen(port, host, () => {
     console.log(`Server running → http://${host}:${port}`);
 });
